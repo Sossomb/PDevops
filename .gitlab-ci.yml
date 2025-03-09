@@ -1,0 +1,90 @@
+# Définir les différentes étapes de ton pipeline CI/CD
+stages:
+  - build          # Étape de construction du projet
+  - test           # Étape des tests
+  - quality        # Étape de vérification de la qualité du code
+  - dockerize      # Étape pour créer l'image Docker
+  - deploy         # Étape de déploiement dans différents environnements
+  - monitoring     # Étape de déploiement du monitoring (Prometheus/Grafana)
+  - logs           # Étape de déploiement de l'ELK Stack pour les logs
+
+# 1. Étape de build du projet
+build:
+  stage: build
+  image: mcr.microsoft.com/dotnet/core/sdk:3.1  # Image Docker pour .NET SDK
+  script:
+    - echo "Building .NET project..."
+    - dotnet restore PDevops.sln               # Restaurer les dépendances
+    - dotnet build PDevops.sln --configuration Release  # Construire le projet en mode Release
+
+# 2. Étape de test unitaire
+unit_tests:
+  stage: test
+  image: mcr.microsoft.com/dotnet/core/sdk:3.1  # Utiliser l'image .NET SDK pour exécuter les tests
+  script:
+    - echo "Running unit tests..."
+    - dotnet test PDevops.sln --configuration Release  # Exécuter les tests unitaires sur le projet
+
+# 3. Étape des tests UI avec Selenium
+ui_tests:
+  stage: test
+  image: selenium/standalone-chrome:latest  # Image Docker pour Selenium avec Chrome
+  script:
+    - echo "Running UI tests with Selenium..."
+    - dotnet test Tests/UI/UiTests.csproj --configuration Release  # Exécuter les tests UI avec Selenium
+
+# 4. Étape de vérification de la qualité du code avec SonarQube
+quality:
+  stage: quality
+  image: sonarsource/sonar-scanner-cli  # Utiliser l'image Docker de SonarQube pour analyser la qualité du code
+  script:
+    - echo "Running SonarQube analysis..."
+    - sonar-scanner -Dsonar.projectKey=ton-projet -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=$SONAR_TOKEN  # Lancer l'analyse de qualité via SonarQube
+
+# 5. Étape de création de l'image Docker
+dockerize:
+  stage: dockerize
+  image: docker:19.03.12  # Utiliser Docker pour créer l'image
+  services:
+    - docker:19.03.12-dind  # Service Docker pour l'exécution de Docker en mode privilégié
+  script:
+    - echo "Building Docker image..."
+    - docker build -t registry.gitlab.com/PDevops/gestionetab:latest .  # Construire l'image Docker pour le projet
+    - docker push registry.gitlab.com/PDevops/gestionetab:latest  # Pusher l'image Docker vers le registry GitLab
+
+# 6. Étape de déploiement sur Kubernetes
+deploy_k8s:
+  stage: deploy
+  image: lachlanevenson/k8s-kubectl:latest  # Utiliser Kubectl pour interagir avec Kubernetes
+  script:
+    - echo "Deploying to Kubernetes..."
+    - kubectl apply -f kubernetes/deployment.yaml  # Appliquer le déploiement Kubernetes
+    - kubectl rollout status deployment/ton-deployment  # Vérifier que le déploiement est réussi
+
+# 7. Étape de déploiement sur un serveur cloud (ex. AWS)
+deploy_prod:
+  stage: deploy
+  image: docker:19.03.12  # Utiliser Docker pour le déploiement sur un serveur cloud
+  script:
+    - echo "Deploying to AWS cloud..."
+    - docker push registry.gitlab.com/PDevops/gestionetab:latest  # Pusher l'image Docker vers un registre cloud
+    - aws ecs update-service --cluster mon-cluster --service mon-service --force-new-deployment  # Mettre à jour le service sur AWS ECS
+
+# 8. Déploiement de Prometheus et Grafana pour le monitoring
+monitoring_deploy:
+  stage: monitoring
+  image: lachlanevenson/k8s-kubectl:latest  # Utiliser Kubectl pour déployer Prometheus et Grafana
+  script:
+    - echo "Deploying Prometheus and Grafana for monitoring..."
+    - kubectl apply -f kubernetes/prometheus-deployment.yaml  # Déployer Prometheus
+    - kubectl apply -f kubernetes/grafana-deployment.yaml    # Déployer Grafana
+
+# 9. Déploiement de l'ELK Stack (Elasticsearch, Logstash, Kibana) pour la gestion des logs
+log_deploy:
+  stage: logs
+  image: lachlanevenson/k8s-kubectl:latest  # Utiliser Kubectl pour déployer l'ELK Stack
+  script:
+    - echo "Deploying ELK Stack for logs..."
+    - kubectl apply -f kubernetes/elasticsearch-deployment.yaml  # Déployer Elasticsearch
+    - kubectl apply -f kubernetes/logstash-deployment.yaml     # Déployer Logstash
+    - kubectl apply -f kubernetes/kibana-deployment.yaml       # Déployer Kibana pour visualiser les logs
