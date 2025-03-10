@@ -1,4 +1,3 @@
-# Définir les différentes étapes de ton pipeline CI/CD
 stages:
   - build          # Étape de construction du projet
   - test           # Étape des tests
@@ -11,7 +10,7 @@ stages:
 # 1. Étape de build du projet
 build:
   stage: build
-  image: mcr.microsoft.com/dotnet/core/sdk:3.1  # Image Docker pour .NET SDK
+  image: mcr.microsoft.com/dotnet/sdk:6.0  # Mise à jour vers l'image .NET SDK 6.0
   script:
     - echo "Building .NET project..."
     - dotnet restore PDevops.sln               # Restaurer les dépendances
@@ -20,7 +19,7 @@ build:
 # 2. Étape de test unitaire
 unit_tests:
   stage: test
-  image: mcr.microsoft.com/dotnet/core/sdk:3.1  # Utiliser l'image .NET SDK pour exécuter les tests
+  image: mcr.microsoft.com/dotnet/sdk:6.0  # Utiliser l'image .NET SDK 6.0 pour exécuter les tests
   script:
     - echo "Running unit tests..."
     - dotnet test PDevops.sln --configuration Release  # Exécuter les tests unitaires sur le projet
@@ -36,44 +35,44 @@ ui_tests:
 # 4. Étape de vérification de la qualité du code avec SonarQube
 quality:
   stage: quality
-  image: sonarsource/sonar-scanner-cli  # Utiliser l'image Docker de SonarQube pour analyser la qualité du code
+  image: sonarsource/sonar-scanner-cli:latest  # Utiliser l'image Docker de SonarQube CLI
   script:
     - echo "Running SonarQube analysis..."
-    - sonar-scanner -Dsonar.projectKey=ton-projet -Dsonar.host.url=http://sonarqube:9000 -Dsonar.login=$SONAR_TOKEN  # Lancer l'analyse de qualité via SonarQube
+    - sonar-scanner -Dsonar.projectKey=ton-projet -Dsonar.host.url=http://<sonarqube_server>:9000 -Dsonar.login=$SONAR_TOKEN  # Remplacez <sonarqube_server> par l'URL de votre serveur SonarQube
 
 # 5. Étape de création de l'image Docker
 dockerize:
   stage: dockerize
-  image: docker:19.03.12  # Utiliser Docker pour créer l'image
+  image: docker:20.10.17  # Mettre à jour Docker pour une version stable
   services:
-    - docker:19.03.12-dind  # Service Docker pour l'exécution de Docker en mode privilégié
+    - docker:20.10.17-dind  # Service Docker-in-Docker pour la construction des images
   script:
     - echo "Building Docker image..."
-    - docker build -t registry.gitlab.com/PDevops/gestionetab:latest .  # Construire l'image Docker pour le projet
-    - docker push registry.gitlab.com/PDevops/gestionetab:latest  # Pusher l'image Docker vers le registry GitLab
+    - docker build -t registry.gitlab.com/PDevops/gestionetab:latest .  # Construire l'image Docker
+    - docker push registry.gitlab.com/PDevops/gestionetab:latest  # Pusher l'image Docker vers le registre GitLab
 
 # 6. Étape de déploiement sur Kubernetes
 deploy_k8s:
   stage: deploy
-  image: lachlanevenson/k8s-kubectl:latest  # Utiliser Kubectl pour interagir avec Kubernetes
+  image: bitnami/kubectl:latest  # Image officielle Kubectl par Bitnami
   script:
     - echo "Deploying to Kubernetes..."
-    - kubectl apply -f kubernetes/deployment.yaml  # Appliquer le déploiement Kubernetes
+    - kubectl apply -f kubernetes/deployment.yaml  # Appliquer le fichier de déploiement Kubernetes
     - kubectl rollout status deployment/ton-deployment  # Vérifier que le déploiement est réussi
 
 # 7. Étape de déploiement sur un serveur cloud (ex. AWS)
 deploy_prod:
   stage: deploy
-  image: docker:19.03.12  # Utiliser Docker pour le déploiement sur un serveur cloud
+  image: amazon/aws-cli:2.7.24  # Image AWS CLI officielle
   script:
     - echo "Deploying to AWS cloud..."
-    - docker push registry.gitlab.com/PDevops/gestionetab:latest  # Pusher l'image Docker vers un registre cloud
-    - aws ecs update-service --cluster mon-cluster --service mon-service --force-new-deployment  # Mettre à jour le service sur AWS ECS
+    - docker push registry.gitlab.com/PDevops/gestionetab:latest  # Pusher l'image Docker vers le registre cloud
+    - aws ecs update-service --cluster mon-cluster --service mon-service --force-new-deployment  # Déployer sur AWS ECS
 
 # 8. Déploiement de Prometheus et Grafana pour le monitoring
 monitoring_deploy:
   stage: monitoring
-  image: lachlanevenson/k8s-kubectl:latest  # Utiliser Kubectl pour déployer Prometheus et Grafana
+  image: bitnami/kubectl:latest  # Image pour le déploiement Kubernetes
   script:
     - echo "Deploying Prometheus and Grafana for monitoring..."
     - kubectl apply -f kubernetes/prometheus-deployment.yaml  # Déployer Prometheus
@@ -82,9 +81,9 @@ monitoring_deploy:
 # 9. Déploiement de l'ELK Stack (Elasticsearch, Logstash, Kibana) pour la gestion des logs
 log_deploy:
   stage: logs
-  image: lachlanevenson/k8s-kubectl:latest  # Utiliser Kubectl pour déployer l'ELK Stack
+  image: bitnami/kubectl:latest  # Image pour Kubernetes
   script:
     - echo "Deploying ELK Stack for logs..."
     - kubectl apply -f kubernetes/elasticsearch-deployment.yaml  # Déployer Elasticsearch
     - kubectl apply -f kubernetes/logstash-deployment.yaml     # Déployer Logstash
-    - kubectl apply -f kubernetes/kibana-deployment.yaml       # Déployer Kibana pour visualiser les logs
+    - kubectl apply -f kubernetes/kibana-deployment.yaml       # Déployer Kibana
